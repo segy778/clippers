@@ -61,6 +61,9 @@ CREATE TABLE IF NOT EXISTS clips (
     yt_video_id TEXT UNIQUE,
     publish_at TEXT,
     uploaded_at TEXT,
+    upload_started_at TEXT,              -- posé juste avant l'envoi : permet de détecter un envoi interrompu
+    thumb_set INTEGER NOT NULL DEFAULT 0,      -- miniature appliquée sur YouTube
+    playlist_added INTEGER NOT NULL DEFAULT 0, -- ajouté à la playlist
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -107,7 +110,24 @@ def connect(path: Path | str) -> sqlite3.Connection:
     if str(path) != ":memory:":
         conn.execute("PRAGMA journal_mode = WAL")  # lecture par l'interface pendant que `run` écrit
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
+
+
+# Colonnes ajoutées après la création initiale : (table, colonne, définition).
+MIGRATIONS = [
+    ("clips", "upload_started_at", "TEXT"),
+    ("clips", "thumb_set", "INTEGER NOT NULL DEFAULT 0"),
+    ("clips", "playlist_added", "INTEGER NOT NULL DEFAULT 0"),
+]
+
+
+def _migrate(conn) -> None:
+    """Ajoute les colonnes manquantes d'une base créée par une version précédente."""
+    for table, column, definition in MIGRATIONS:
+        cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 class transaction:

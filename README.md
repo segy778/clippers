@@ -2,7 +2,7 @@
 
 Transforme des vidéos YouTube longues (podcasts, interviews, formations) en clips horizontaux de 2 à 5 minutes, notés, titrés et avec miniature, puis les publie en programmé sur une chaîne de clips.
 
-> État : **phases 1 et 2** (ingestion, transcription, sélection, bornes, titres, miniatures, revue, rendu). Publication en phase 3, suivi en phase 4.
+> État : **phases 1 à 3** (ingestion, transcription, sélection, bornes, titres, miniatures, revue, rendu, publication programmée). Suivi des vues en phase 4.
 
 ## Installation pas à pas
 
@@ -33,6 +33,23 @@ Conseil miniatures : une police grasse et condensée (Anton, Bebas Neue, Montser
 
 Les prompts envoyés à Claude sont dans `prompts/*.md` : modifie-les librement, les `{{variables}}` sont remplacées automatiquement.
 
+### 5. Connexion YouTube (OAuth) — une seule fois
+Nécessaire uniquement pour `clipper publish` (et `clipper stats`).
+
+1. Ouvre https://console.cloud.google.com et crée un projet (ex. « Clipper »).
+2. **API et services → Bibliothèque** : active **YouTube Data API v3** et **YouTube Analytics API**.
+3. **Google Auth Platform** (ex-« Écran de consentement OAuth ») → *Commencer* : nom de l'application, e-mail d'assistance, audience **Externe**, e-mail de contact.
+4. **Audience → Utilisateurs test** : ajoute le compte Google qui gère la chaîne de clips.
+   Puis, pour éviter que la connexion expire tous les 7 jours, clique **Publier l'application** (statut « En production »). Pour un usage personnel, aucune validation Google n'est nécessaire : à la connexion, Google affichera « Application non validée » → *Paramètres avancés* → *Accéder à Clipper*.
+5. **Clients → Créer un client** → type **Application de bureau** → télécharge le JSON et enregistre-le à la racine du projet sous le nom `client_secret.json` (ou indique son chemin dans `YOUTUBE_CLIENT_SECRETS` du `.env`).
+6. Lance :
+   ```bash
+   clipper publish --login
+   ```
+   Le navigateur s'ouvre : choisis le compte, **puis la chaîne de clips** si le compte en gère plusieurs. Clipper affiche « Connecté à la chaîne « … » » : vérifie que c'est la bonne. Le jeton est enregistré dans `data/youtube_token.json` (ne le partage pas). Pour changer de chaîne, relance `clipper publish --login`.
+7. **Vérifie la chaîne** (numéro de téléphone) sur https://www.youtube.com/verify : sans cela, YouTube refuse les miniatures personnalisées (Clipper envoie quand même la vidéo et retentera la miniature au prochain `publish`).
+8. **Important — audit de l'API.** YouTube verrouille en **privé** les vidéos envoyées par un projet Google Cloud non audité (règle en vigueur depuis juillet 2020), même avec une date de publication programmée. Remplis le formulaire d'audit *YouTube API Services* (https://support.google.com/youtube/contact/yt_api_form) en décrivant l'usage : envoi de clips de tes propres vidéos sur ta chaîne. Le même formulaire sert à demander plus de quota. En attendant la réponse, teste avec un seul clip (`clipper publish --max 1`).
+
 ## Utilisation
 ```bash
 clipper add https://www.youtube.com/watch?v=XXXXXXXXXXX     # une vidéo
@@ -43,6 +60,8 @@ clipper run                                                   # télécharge, tr
 clipper status                                                # état, nombre de clips, coût par vidéo et cumul
 clipper status 1                                              # détail des candidats de la vidéo 1
 clipper review                                                # ouvre la page de revue dans le navigateur
+clipper publish --dry-run                                     # montre les créneaux prévus, sans rien envoyer
+clipper publish                                               # envoie les clips validés (privés, programmés)
 ```
 
 ### Ce que fait `clipper run`
@@ -71,6 +90,15 @@ Une page par vidéo. Le lecteur joue le clip actif dans ses bornes ; tout est sa
 
 Clique sur une des 10 vignettes pour changer l'image de la miniature. Les clips écartés automatiquement (trop courts ou trop longs) restent affichés : ajuste leurs bornes puis valide pour les repêcher.
 
+### Publication
+- La file = les clips validés, dans l'ordre où tu les as validés. Chaque clip reçoit le prochain créneau libre défini dans `config.yaml` (`publish.slots`, `publish.days`, `publish.timezone`, au moins `min_lead_hours` d'avance).
+- Chaque vidéo est envoyée en **privé** avec une date de publication : c'est YouTube qui la rend publique au créneau. Rien n'est jamais publié directement.
+- Titre, description (avec lien et timecode de la vidéo source), tags, catégorie, langue, miniature et playlist (`publish.playlist_id`) sont renseignés.
+- **Quota** : 10 000 unités par jour, remises à zéro à minuit heure du Pacifique (9 h à Paris). Un clip coûte 1 600 (envoi) + 50 (miniature) + 50 (playlist) = **1 700 unités → 5 clips par jour** avec playlist, 6 sans. `clipper publish` et `clipper status` affichent le reste ; quand il ne suffit plus, la publication s'arrête proprement et la file reste intacte pour le lendemain.
+- Un envoi interrompu (coupure, crash) est retrouvé sur la chaîne au passage suivant au lieu d'être renvoyé en double.
+- `clipper publish --max 2` limite le nombre d'envois.
+
+### Robustesse
 - Toutes les commandes sont **idempotentes** : relancer `clipper run` après un crash reprend là où ça s'est arrêté, sans retélécharger ni retranscrire.
 - Une vidéo en échec n'empêche pas les autres d'avancer. Après 3 échecs elle est mise de côté ; `clipper run --retry` la retente.
 - `clipper run --video 3` ne traite que la vidéo 3. `-v` affiche les logs détaillés. Journal complet dans `data/clipper.log`.
@@ -83,6 +111,9 @@ Clique sur une des 10 vignettes pour changer l'image de la miniature. Les clips 
 
 ## Dépannage
 - **« Sign in to confirm you're not a bot » / HTTP 403** : YouTube bloque parfois les téléchargements. Renseigne `ingest.cookies_from_browser: chrome` (ou `firefox`) dans `config.yaml`, ou exporte un `cookies.txt` et indique-le dans `ingest.cookies_file`. Mets aussi yt-dlp à jour : `pip install -U "yt-dlp[default]"`.
+- **Fichier OAuth introuvable** : place `client_secret.json` à la racine (étape 5 de la connexion YouTube).
+- **« Jeton YouTube expiré »** : l'application Google est restée en mode « Test » (jeton valable 7 jours). Publie-la (étape 4) puis `clipper publish --login`.
+- **Vidéos bloquées en privé malgré la date** : le projet n'a pas encore passé l'audit API (étape 8).
 - **Variable … absente** : la clé n'est pas dans `.env`, ou tu ne lances pas la commande depuis le dossier du projet (sinon définis `CLIPPER_HOME=/chemin/vers/clipper`).
 
 ## Tests

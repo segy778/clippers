@@ -4,7 +4,10 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import costs, db
+from zoneinfo import ZoneInfo
+
+from . import costs, db, quota
+from . import publish as pub
 from .config import load_config
 from .log import log, setup
 from .transcript import fmt_ts
@@ -75,6 +78,8 @@ def cmd_status(conn, cfg, args) -> int:
         print(f"{r['id']:>3}  {title:<44} {dur:>7}  {state:<20} {c['n'] if c else 0:>5} "
               f"{(c['ok'] or 0) if c else 0:>6} {(c['up'] or 0) if c else 0:>5} {costs.video_cost(conn, r['id']):>7.3f}$")
     print(f"\nCoût cumulé : {costs.total_cost(conn):.3f} $")
+    print(f"File de publication : {len(pub.queue(conn))} clip(s) validé(s) en attente.")
+    print(_quota_line(conn, cfg))
     errors = [r for r in rows if r["error"]]
     for r in errors:
         print(f"  ✗ {r['id']} [{r['source_id']}] {r['error'][:150]}")
@@ -120,6 +125,51 @@ def cmd_review(conn, cfg, args) -> int:
     return 0
 
 
+def _quota_line(conn, cfg) -> str:
+    reset = quota.next_reset().astimezone(ZoneInfo(cfg["publish"]["timezone"]))
+    return (f"Quota YouTube : {quota.remaining(conn, cfg)} / {cfg['quota']['daily_limit']} unités restantes "
+            f"aujourd'hui → {quota.clips_left_today(conn, cfg)} clip(s) publiable(s) "
+            f"(remise à zéro {reset:%d/%m à %H:%M})")
+
+
+def cmd_publish(conn, cfg, args) -> int:
+    pending = pub.queue(conn)
+    print(_quota_line(conn, cfg))
+    print(f"File de publication : {len(pending)} clip(s) validé(s) en attente.")
+    if args.dry_run:
+        for clip, slot in pub.plan(conn, cfg, limit=args.max):
+            print(f"  #{clip['id']:<4} {pub.fmt_local(slot, cfg)}  {clip['title']}")
+        rest = len(pending) - len(pub.plan(conn, cfg, limit=args.max))
+        if rest > 0:
+            print(f"  … {rest} autre(s) clip(s) restent dans la file pour les jours suivants.")
+        return 0
+    if not pending and not pub.unfinished(conn) and not args.login:
+        print("Rien à publier. Valide des clips avec `clipper review`.")
+        return 0
+
+    from .youtube import YouTube, get_credentials
+
+    yt = YouTube(get_credentials(cfg, force_login=args.login, open_browser=not args.no_browser))
+    if args.login:
+        quota.charge(conn, cfg["quota"]["list_cost"])
+        ch = yt.channel()
+        log.info("Connecté à la chaîne « %s » (%s).", ch["title"], ch["id"])
+        if not pending:
+            return 0
+    report = pub.publish(conn, cfg, yt, limit=args.max)
+    for cid, yt_id, at in report.uploaded:
+        log.info("✓ #%d → https://youtu.be/%s (privée, publication programmée %s)", cid, yt_id,
+                 pub.fmt_local(pub.parse_iso(at), cfg))
+    for cid, why in report.skipped:
+        log.warning("Clip #%d : %s", cid, why)
+    if report.stopped_reason:
+        left = len(pub.queue(conn))
+        log.warning("Arrêt : %s. %d clip(s) restent dans la file, relance `clipper publish` après la remise à zéro.",
+                    report.stopped_reason, left)
+    print(_quota_line(conn, cfg))
+    return 0
+
+
 def not_yet(phase: int):
     def handler(conn, cfg, args) -> int:
         log.warning("Commande disponible à la phase %d.", phase)
@@ -149,7 +199,12 @@ def build_parser() -> argparse.ArgumentParser:
     rv.add_argument("--port", type=int, help="port (par défaut : review.port de config.yaml)")
     rv.add_argument("--no-browser", action="store_true", help="ne pas ouvrir le navigateur")
     rv.set_defaults(func=cmd_review)
-    sub.add_parser("publish", help="publier les clips validés selon la cadence").set_defaults(func=not_yet(3))
+    pb = sub.add_parser("publish", help="envoyer les clips validés (privés, publication programmée)")
+    pb.add_argument("--dry-run", action="store_true", help="afficher les créneaux prévus sans rien envoyer")
+    pb.add_argument("--max", type=int, help="nombre maximum de clips à envoyer")
+    pb.add_argument("--login", action="store_true", help="se (re)connecter à YouTube, par ex. pour changer de chaîne")
+    pb.add_argument("--no-browser", action="store_true", help="afficher l'adresse de connexion sans ouvrir le navigateur")
+    pb.set_defaults(func=cmd_publish)
     sub.add_parser("stats", help="relever vues et durée moyenne de visionnage").set_defaults(func=not_yet(4))
     return p
 

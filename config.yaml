@@ -66,11 +66,12 @@ publish:
   timezone: Europe/Paris
   slots: ["18:00"]           # heures de publication ; un clip par créneau
   days: [mon, tue, wed, thu, fri, sat, sun]
-  playlist_id: null          # playlist YouTube où ranger les clips (null = aucune)
+  playlist_id: null          # identifiant de playlist (PL…, visible dans l'URL de la playlist) ; null = aucune
   category_id: "27"          # 27 = Éducation, 22 = People & Blogs, 28 = Science & Tech
   default_language: fr
   min_lead_hours: 2          # pas de créneau à moins de N heures de maintenant
 
+# Un clip coûte upload + miniature (+ playlist si playlist_id) : 1 700 unités → 5 clips/jour (6 sans playlist).
 quota:
   daily_limit: 10000         # quota quotidien de l'API YouTube Data v3 (remis à zéro à minuit, heure du Pacifique)
   upload_cost: 1600          # videos.insert

@@ -76,6 +76,10 @@ function cardHTML(c, i) {
   let render = "";
   if (c.status === "approved") render = '<span class="pill">rendu en attente…</span>';
   if (c.render_url) render = `<a class="pill ok" href="${c.render_url}" target="_blank">clip rendu ↗</a>`;
+  if (c.yt_video_id) {
+    const when = c.publish_at ? new Date(c.publish_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "";
+    render += ` <a class="pill ok" href="https://studio.youtube.com/video/${c.yt_video_id}/edit" target="_blank">YouTube · ${when} ↗</a>`;
+  }
   return `
   <article class="card ${i === state.active ? "active" : ""} st-${c.status}" data-i="${i}" id="clip-${c.id}">
     <header>
