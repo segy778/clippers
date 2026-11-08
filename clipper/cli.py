@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from . import costs, db, quota
@@ -170,11 +171,32 @@ def cmd_publish(conn, cfg, args) -> int:
     return 0
 
 
-def not_yet(phase: int):
-    def handler(conn, cfg, args) -> int:
-        log.warning("Commande disponible à la phase %d.", phase)
-        return 1
-    return handler
+def cmd_stats(conn, cfg, args) -> int:
+    from pathlib import Path
+
+    from . import stats
+
+    if not args.no_fetch and stats.due_checkpoints(conn, cfg, datetime.now(timezone.utc)):
+        from .youtube import YouTube, get_credentials
+
+        stats.collect(conn, cfg, YouTube(get_credentials(cfg, open_browser=not args.no_browser)))
+    rows = stats.table(conn, cfg)
+    if not rows:
+        print("Aucun clip publié pour l'instant.")
+        return 0
+    days = cfg["stats"]["checkpoints_days"]
+    head = "".join(f" {'J+' + str(d) + ' vues':>10} {'moy.':>6} {'rét.':>6}" for d in days)
+    print(f"{'#':>4} {'Note':>4}  {'Publié':<11} {'Titre':<44}{head}")
+    fmt = lambda v, suffix="": "–" if v is None else f"{v}{suffix}"  # noqa: E731
+    for r in rows:
+        when = pub.fmt_local(pub.parse_iso(r["publie_le"]), cfg)[5:] if r["publie_le"] else "?"
+        cells = "".join(f" {fmt(r[f'vues_j{d}']):>10} {fmt(r[f'duree_moy_j{d}_s'], 's'):>6} "
+                        f"{fmt(r[f'retention_j{d}_pct'], '%'):>6}" for d in days)
+        print(f"{r['clip_id']:>4} {r['note']:>4}  {when:<11} {(r['titre'] or '')[:44]:<44}{cells}")
+    if args.csv:
+        path = stats.export_csv(rows, Path(args.csv))
+        log.info("Export CSV : %s (%d clip(s))", path, len(rows))
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -205,7 +227,11 @@ def build_parser() -> argparse.ArgumentParser:
     pb.add_argument("--login", action="store_true", help="se (re)connecter à YouTube, par ex. pour changer de chaîne")
     pb.add_argument("--no-browser", action="store_true", help="afficher l'adresse de connexion sans ouvrir le navigateur")
     pb.set_defaults(func=cmd_publish)
-    sub.add_parser("stats", help="relever vues et durée moyenne de visionnage").set_defaults(func=not_yet(4))
+    st = sub.add_parser("stats", help="relever vues et durée moyenne de visionnage à J+2 et J+7")
+    st.add_argument("--csv", metavar="FICHIER", help="exporter le tableau en CSV (ex. stats.csv)")
+    st.add_argument("--no-fetch", action="store_true", help="afficher sans interroger YouTube")
+    st.add_argument("--no-browser", action="store_true", help="afficher l'adresse de connexion sans ouvrir le navigateur")
+    st.set_defaults(func=cmd_stats)
     return p
 
 

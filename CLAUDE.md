@@ -20,12 +20,12 @@ clipper run [--video ID] [--retry]
 clipper status [ID]            # tableau + coûts ; avec ID : détail des clips
 clipper review [--port N] [--no-browser]   # page de revue locale
 clipper publish [--dry-run] [--max N] [--login] [--no-browser]
-clipper stats                  # phase 4
+clipper stats [--csv FICHIER] [--no-fetch]
 ```
 
 ## Architecture
 - `pipeline.py` : machine à états par vidéo (`videos.stage` = dernière étape réussie : new → downloaded → transcribed → selected → bounded → titled → ready). Fin de `run` : rendu des clips validés en attente (`render.render_pending`). Chaque étape vérifie son artefact avant d'agir. Une exception marque `error`/`attempts` et passe à la vidéo suivante (3 échecs max sauf `--retry`).
-- `ingest.py` (yt-dlp, proxy 720p), `transcribe.py` (backend + cache `transcript.json`), `transcript.py` (phrases, rendu `[début-fin] S<n>: texte`, blocs recouvrants), `llm.py` (appel Claude, `extract_json`, coût), `selection.py` (prompt, `parse_candidates`, `dedupe`), `bounds.py` (`snap` : recalage phrase + marge bornée par les voisins + contrôle durée), `titles.py` (1 appel/vidéo, nettoyage ≤ 60 car., pied de description calculé à la volée depuis `start`), `thumbs.py`, `render.py` (loudnorm 2 passes linéaire, `is_fresh` = rendu aligné sur les bornes actuelles), `web/app.py` (API + file de rendu à un seul thread), `quota.py` (jour = date à Los Angeles, décompte AVANT chaque appel, `exhaust` si YouTube dit quotaExceeded), `publish.py` (file = validés par `approved_at`, `next_slots`, envoi privé + `publishAt`, miniature/playlist suivies par `thumb_set`/`playlist_added`, reprise d'un envoi interrompu via `upload_started_at` + recherche du titre dans les 50 derniers envois), `youtube.py` (seul module qui parle à Google ; remplacé par `FakeYT` dans les tests), `costs.py`, `db.py` (`MIGRATIONS` pour les colonnes ajoutées).
+- `ingest.py` (yt-dlp, proxy 720p), `transcribe.py` (backend + cache `transcript.json`), `transcript.py` (phrases, rendu `[début-fin] S<n>: texte`, blocs recouvrants), `llm.py` (appel Claude, `extract_json`, coût), `selection.py` (prompt, `parse_candidates`, `dedupe`), `bounds.py` (`snap` : recalage phrase + marge bornée par les voisins + contrôle durée), `titles.py` (1 appel/vidéo, nettoyage ≤ 60 car., pied de description calculé à la volée depuis `start`), `thumbs.py`, `render.py` (loudnorm 2 passes linéaire, `is_fresh` = rendu aligné sur les bornes actuelles), `web/app.py` (API + file de rendu à un seul thread), `quota.py` (jour = date à Los Angeles, décompte AVANT chaque appel, `exhaust` si YouTube dit quotaExceeded), `publish.py` (file = validés par `approved_at`, `next_slots`, envoi privé + `publishAt`, miniature/playlist suivies par `thumb_set`/`playlist_added`, reprise d'un envoi interrompu via `upload_started_at` + recherche du titre dans les 50 derniers envois), `youtube.py` (seul module qui parle à Google ; remplacé par `FakeYT` dans les tests), `stats.py` (relevés J+N dus d'après `publish_at`, fenêtre Analytics [date de publication PT, +N jours], attente `GRACE_DAYS` puis repli sur viewCount, CSV `;` + BOM), `costs.py`, `db.py` (`MIGRATIONS` pour les colonnes ajoutées).
 - Statuts de clip : candidate → approved → rendered → uploaded ; rejected ; auto_rejected (durée hors limites = repêchable en revue ; « Chevauche… » = masqué). Modifier les bornes d'un clip rendu le repasse en approved (re-rendu).
 - Données : `data/videos/<source_id>/{source.mkv,info.json,transcript.json,proxy.mp4}`, `data/clips/<id>/`.
 
@@ -41,5 +41,7 @@ clipper stats                  # phase 4
 ## État
 - Phase 1 (ingestion, transcription, sélection) : validée par l'utilisateur.
 - Phase 2 (bornes, titres, miniatures, rendu, revue) : validée par l'utilisateur.
-- Phase 3 (OAuth, publication, quota) : codée et testée (faux client YouTube + googleapiclient sur réponses HTTP simulées) ; démo réelle à faire chez l'utilisateur.
+- Phase 3 (OAuth, publication, quota) : validée par l'utilisateur.
+- Phase 4 (suivi J+2/J+7, export CSV) : codée et testée ; démo réelle quand des clips auront été publiés depuis 2 jours.
+- Pas de dépôt distant : code livré en zip ; à pousser dès que l'utilisateur fournit un dépôt GitHub.
 - Tests : `test_pipeline.py` simule Deepgram/Claude et les étapes ffmpeg lourdes ; `test_render_thumbs.py` utilise le vrai ffmpeg.

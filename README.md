@@ -2,7 +2,7 @@
 
 Transforme des vidéos YouTube longues (podcasts, interviews, formations) en clips horizontaux de 2 à 5 minutes, notés, titrés et avec miniature, puis les publie en programmé sur une chaîne de clips.
 
-> État : **phases 1 à 3** (ingestion, transcription, sélection, bornes, titres, miniatures, revue, rendu, publication programmée). Suivi des vues en phase 4.
+> Pipeline complet : ingestion, transcription, sélection, bornes, titres, miniatures, revue, rendu, publication programmée, suivi des vues.
 
 ## Installation pas à pas
 
@@ -62,7 +62,15 @@ clipper status 1                                              # détail des cand
 clipper review                                                # ouvre la page de revue dans le navigateur
 clipper publish --dry-run                                     # montre les créneaux prévus, sans rien envoyer
 clipper publish                                               # envoie les clips validés (privés, programmés)
+clipper stats                                                 # relève vues et durée moyenne à J+2 et J+7
+clipper stats --csv stats.csv                                 # … et exporte le tableau
 ```
+
+Routine conseillée (par exemple chaque matin) :
+```bash
+clipper add https://www.youtube.com/@machaine && clipper run && clipper publish && clipper stats
+```
+puis `clipper review` quand tu as un moment pour valider les nouveaux clips.
 
 ### Ce que fait `clipper run`
 1. Télécharge la vidéo (≤ 1080p) et ses métadonnées.
@@ -97,6 +105,13 @@ Clique sur une des 10 vignettes pour changer l'image de la miniature. Les clips 
 - **Quota** : 10 000 unités par jour, remises à zéro à minuit heure du Pacifique (9 h à Paris). Un clip coûte 1 600 (envoi) + 50 (miniature) + 50 (playlist) = **1 700 unités → 5 clips par jour** avec playlist, 6 sans. `clipper publish` et `clipper status` affichent le reste ; quand il ne suffit plus, la publication s'arrête proprement et la file reste intacte pour le lendemain.
 - Un envoi interrompu (coupure, crash) est retrouvé sur la chaîne au passage suivant au lieu d'être renvoyé en double.
 - `clipper publish --max 2` limite le nombre d'envois.
+
+### Suivi
+- `clipper stats` relève, pour chaque clip publié, les **vues** et la **durée moyenne de visionnage** sur ses 2 premiers jours puis ses 7 premiers jours (`stats.checkpoints_days`), et les enregistre avec le titre et la note donnée par Claude.
+- Les données de YouTube Analytics arrivent avec 1 à 3 jours de retard : le relevé J+2 est souvent fait vers J+4, mais il mesure bien les 2 premiers jours. Lance `clipper stats` régulièrement, il ne fait que les relevés dus. Après 5 jours sans données, il enregistre le compteur de vues actuel sans durée moyenne.
+- Le tableau affiche aussi la **rétention** (durée moyenne ÷ durée du clip) : pratique pour comparer la note de Claude à la performance réelle et ajuster `prompts/selection.md`.
+- `--csv` exporte un fichier séparé par `;` qui s'ouvre directement dans Excel ou Numbers en français.
+- Coût : 1 unité de quota YouTube par lot de 50 vidéos ; l'API Analytics a son propre quota, largement suffisant.
 
 ### Robustesse
 - Toutes les commandes sont **idempotentes** : relancer `clipper run` après un crash reprend là où ça s'est arrêté, sans retélécharger ni retranscrire.

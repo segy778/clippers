@@ -49,3 +49,15 @@ def test_thumbnail_forbidden(tmp_path):
     yt, _ = client([err(403, "forbidden")])
     with pytest.raises(ThumbnailForbidden):
         yt.set_thumbnail("VID", f)
+
+
+def test_view_counts_and_analytics_report():
+    yt, _ = client([({"status": "200"}, json.dumps({"items": [
+        {"id": "V1", "statistics": {"viewCount": "42"}, "status": {"privacyStatus": "public"}}]}))])
+    assert yt.view_counts(["V1"]) == {"V1": {"views": 42, "privacy": "public"}}
+    yt.analytics = build("youtubeAnalytics", "v2", http=HttpMockSequence([
+        ({"status": "200"}, json.dumps({"rows": [[120, 88.5]]})),
+        ({"status": "200"}, json.dumps({"rows": []})),
+    ]), static_discovery=True)
+    assert yt.video_report("V1", "2026-11-02", "2026-11-04") == {"views": 120, "avg_view_duration": 88.5}
+    assert yt.video_report("V1", "2026-11-02", "2026-11-04") is None

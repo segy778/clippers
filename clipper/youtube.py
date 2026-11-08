@@ -88,6 +88,7 @@ class YouTube:
         from googleapiclient.discovery import build
 
         self.api = build("youtube", "v3", credentials=creds, cache_discovery=False)
+        self.analytics = build("youtubeAnalytics", "v2", credentials=creds, cache_discovery=False)
         self.creds = creds
 
     def _exec(self, request):
@@ -159,3 +160,27 @@ class YouTube:
         """50 unités."""
         self._exec(self.api.playlistItems().insert(part="snippet", body={"snippet": {
             "playlistId": playlist_id, "resourceId": {"kind": "youtube#video", "videoId": video_id}}}))
+
+    def view_counts(self, video_ids: list[str]) -> dict[str, dict]:
+        """Vues actuelles et statut de visibilité, par lots de 50 (1 unité par lot)."""
+        out = {}
+        for i in range(0, len(video_ids), 50):
+            res = self._exec(self.api.videos().list(part="statistics,status", id=",".join(video_ids[i:i + 50])))
+            for it in res.get("items", []):
+                out[it["id"]] = {"views": int(it["statistics"].get("viewCount", 0)),
+                                 "privacy": it["status"]["privacyStatus"]}
+        return out
+
+    def video_report(self, video_id: str, start: str, end: str) -> dict | None:
+        """Vues et durée moyenne de visionnage (s) entre deux dates (YYYY-MM-DD, heure du Pacifique).
+
+        API YouTube Analytics (quota séparé de l'API Data). Renvoie None si les données
+        ne sont pas encore disponibles (délai habituel de 1 à 3 jours).
+        """
+        res = self._exec(self.analytics.reports().query(
+            ids="channel==MINE", startDate=start, endDate=end, metrics="views,averageViewDuration",
+            filters=f"video=={video_id}"))
+        rows = res.get("rows") or []
+        if not rows or rows[0][0] in (None, 0) and rows[0][1] in (None, 0):
+            return None
+        return {"views": int(rows[0][0]), "avg_view_duration": float(rows[0][1])}
