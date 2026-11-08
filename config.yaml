@@ -1,0 +1,95 @@
+# Configuration de Clipper.
+# Toute valeur absente reprend la valeur par défaut définie dans clipper/config.py.
+# Les clés secrètes vont dans .env, jamais ici.
+
+paths:
+  data: data                 # dossier des vidéos, transcriptions, clips et de la base SQLite
+  prompts: prompts           # dossier des prompts modifiables (selection.md, titles.md)
+
+ingest:
+  max_height: 1080           # qualité max téléchargée (la sortie est en 1080p, inutile de prendre la 4K)
+  min_duration_s: 600        # ignore les vidéos plus courtes (shorts, bandes-annonces) lors d'un add de playlist/chaîne
+  cookies_file: null         # fichier cookies.txt si YouTube demande une connexion (« confirm you're not a bot »)
+  cookies_from_browser: null # ou nom du navigateur : chrome, firefox, edge...
+  js_runtimes: [deno, node]  # runtimes JS que yt-dlp peut utiliser pour le déchiffrement YouTube
+
+transcription:
+  provider: deepgram
+  model: nova-3
+  language: fr               # langue des vidéos sources ("multi" pour la détection automatique)
+
+llm:
+  model: claude-sonnet-5-5   # modèle utilisé pour la sélection et les titres
+  fallback: true             # si le modèle refuse une requête, l'API la relance sur un autre modèle
+  selection_effort: high     # niveau de réflexion pour la sélection (low, medium, high, xhigh, max)
+  titles_effort: medium      # niveau de réflexion pour les titres
+
+selection:
+  min_clips: 5
+  max_clips: 15
+  max_overlap: 0.20          # chevauchement max entre deux clips (part du plus court)
+  block_minutes: 90          # au-delà, la transcription est envoyée en blocs de cette durée...
+  block_overlap_minutes: 5   # ...qui se recouvrent de ces minutes, puis les candidats sont fusionnés
+
+bounds:
+  min_duration_s: 120        # durée minimale d'un clip (2 min)
+  max_duration_s: 300        # durée maximale d'un clip (5 min)
+  margin_s: 0.3              # marge ajoutée avant le premier mot et après le dernier
+  snap_window_s: 15          # distance max pour recaler une borne sur une frontière de phrase
+
+render:
+  width: 1920
+  height: 1080
+  crf: 18                    # qualité x264 (plus bas = meilleur et plus lourd)
+  preset: medium
+  audio_bitrate: 192k
+  fade_s: 0.3                # fondu audio en entrée et en sortie
+  loudness_lufs: -14         # loudness cible (norme YouTube)
+  true_peak_db: -1.0
+
+thumbnail:
+  frames: 10                 # nombre d'images candidates extraites par clip
+  width: 1280
+  height: 720
+  max_bytes: 2000000         # YouTube refuse les miniatures de plus de 2 Mo
+  font_path: null            # police TTF/OTF ; null = DejaVu Sans Bold si présente
+  font_size: 110
+  text_color: "#FFFFFF"
+  stroke_color: "#000000"
+  stroke_width: 8
+  position: bottom           # top, center ou bottom
+  margin: 50
+  uppercase: true
+  band_color: "#00000099"    # bandeau semi-transparent derrière le texte (null pour aucun)
+
+publish:
+  timezone: Europe/Paris
+  slots: ["18:00"]           # heures de publication ; un clip par créneau
+  days: [mon, tue, wed, thu, fri, sat, sun]
+  playlist_id: null          # playlist YouTube où ranger les clips (null = aucune)
+  category_id: "27"          # 27 = Éducation, 22 = People & Blogs, 28 = Science & Tech
+  default_language: fr
+  min_lead_hours: 2          # pas de créneau à moins de N heures de maintenant
+
+quota:
+  daily_limit: 10000         # quota quotidien de l'API YouTube Data v3 (remis à zéro à minuit, heure du Pacifique)
+  upload_cost: 1600          # videos.insert
+  thumbnail_cost: 50         # thumbnails.set
+  playlist_cost: 50          # playlistItems.insert
+  list_cost: 1               # videos.list (statistiques)
+
+stats:
+  checkpoints_days: [2, 7]   # relevés de vues et durée moyenne de visionnage après publication
+
+review:
+  host: 127.0.0.1
+  port: 8765
+
+# Tarifs utilisés pour estimer les coûts (USD). À vérifier régulièrement sur les pages de prix.
+pricing:
+  deepgram_per_min: 0.0043            # nova-3, transcription pré-enregistrée
+  deepgram_diarize_per_min: 0.0020    # supplément diarisation
+  anthropic:                          # USD par million de tokens
+    claude-sonnet-5-5: {input: 2.00, output: 10.00, cache_read: 0.20, cache_write: 2.50}
+    claude-opus-5-5: {input: 4.00, output: 20.00, cache_read: 0.20, cache_write: 5.00}
+    claude-haiku-5-5: {input: 0.10, output: 0.50, cache_read: 0.01, cache_write: 0.125}
