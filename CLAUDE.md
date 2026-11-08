@@ -43,5 +43,5 @@ clipper stats [--csv FICHIER] [--no-fetch]
 - Phase 2 (bornes, titres, miniatures, rendu, revue) : validée par l'utilisateur.
 - Phase 3 (OAuth, publication, quota) : validée par l'utilisateur.
 - Phase 4 (suivi J+2/J+7, export CSV) : codée et testée ; démo réelle quand des clips auront été publiés depuis 2 jours.
-- Pas de dépôt distant : code livré en zip ; à pousser dès que l'utilisateur fournit un dépôt GitHub.
+- Dépôt : https://github.com/segy778/clippers (branche `main`). v1 complète ; tests réels en cours chez l'utilisateur.
 - Tests : `test_pipeline.py` simule Deepgram/Claude et les étapes ffmpeg lourdes ; `test_render_thumbs.py` utilise le vrai ffmpeg.
