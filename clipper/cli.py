@@ -46,7 +46,8 @@ def cmd_run(conn, cfg, args) -> int:
 
 
 STAGE_FR = {"new": "à télécharger", "downloaded": "téléchargée", "transcribed": "transcrite",
-            "selected": "candidats prêts", "ready": "prête pour la revue"}
+            "selected": "sélectionnée", "bounded": "bornes calées", "titled": "titrée",
+            "ready": "prête pour la revue"}
 
 
 def cmd_status(conn, cfg, args) -> int:
@@ -99,6 +100,26 @@ def _status_video(conn, ref: str) -> int:
     return 0
 
 
+def cmd_review(conn, cfg, args) -> int:
+    import threading
+    import webbrowser
+
+    import uvicorn
+
+    from .web.app import create_app
+
+    host, port = cfg["review"]["host"], args.port or cfg["review"]["port"]
+    url = f"http://{host}:{port}/"
+    ready = conn.execute("SELECT COUNT(*) FROM videos WHERE stage = 'ready'").fetchone()[0]
+    if not ready:
+        log.warning("Aucune vidéo prête pour la revue : lance d'abord `clipper run`.")
+    log.info("Page de revue : %s (Ctrl+C pour arrêter)", url)
+    if not args.no_browser:
+        threading.Timer(1.0, webbrowser.open, args=(url,)).start()
+    uvicorn.run(create_app(cfg), host=host, port=port, log_level="warning")
+    return 0
+
+
 def not_yet(phase: int):
     def handler(conn, cfg, args) -> int:
         log.warning("Commande disponible à la phase %d.", phase)
@@ -124,7 +145,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("video", nargs="?", help="détail des clips d'une vidéo")
     s.set_defaults(func=cmd_status)
 
-    sub.add_parser("review", help="ouvrir la page de revue locale").set_defaults(func=not_yet(2))
+    rv = sub.add_parser("review", help="ouvrir la page de revue locale")
+    rv.add_argument("--port", type=int, help="port (par défaut : review.port de config.yaml)")
+    rv.add_argument("--no-browser", action="store_true", help="ne pas ouvrir le navigateur")
+    rv.set_defaults(func=cmd_review)
     sub.add_parser("publish", help="publier les clips validés selon la cadence").set_defaults(func=not_yet(3))
     sub.add_parser("stats", help="relever vues et durée moyenne de visionnage").set_defaults(func=not_yet(4))
     return p

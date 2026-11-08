@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clipper — revue</title>
+<link rel="icon" href="/static/favicon.svg">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a href="/" class="back">← Vidéos</a>
+  <h1 id="vtitle">…</h1>
+  <span id="counts" class="muted"></span>
+  <span id="renderstate" class="pill hidden"></span>
+  <button id="helpbtn" class="ghost" title="Raccourcis (?)">?</button>
+</header>
+<main class="review">
+  <section class="player" id="player">
+    <video id="video" preload="auto" playsinline></video>
+    <div id="noproxy" class="muted hidden">Proxy de revue absent : relance <code>clipper run</code>.</div>
+    <div class="range">
+      <div class="bound">
+        <span class="label">Début</span>
+        <button data-act="start-1" title="A">−1 s</button>
+        <strong id="tstart">–</strong>
+        <button data-act="start+1" title="Z">+1 s</button>
+      </div>
+      <div class="bound">
+        <span class="label">Fin</span>
+        <button data-act="end-1" title="Q">−1 s</button>
+        <strong id="tend">–</strong>
+        <button data-act="end+1" title="S">+1 s</button>
+      </div>
+      <div class="bound"><span class="label">Durée</span><strong id="tdur">–</strong></div>
+    </div>
+    <div class="transport">
+      <button data-act="play" title="Espace">▶ Lire le clip</button>
+      <button data-act="head" title="D">Écouter le début</button>
+      <button data-act="tail" title="F">Écouter la fin</button>
+    </div>
+    <div class="decide">
+      <button data-act="approve" class="ok" title="V">Valider</button>
+      <button data-act="reject" class="no" title="X">Rejeter</button>
+      <button data-act="reset" class="ghost" title="U">Annuler</button>
+    </div>
+  </section>
+  <section class="clips" id="clips"></section>
+</main>
+<dialog id="help">
+  <h2>Raccourcis clavier</h2>
+  <table class="keys">
+    <tr><td><kbd>J</kbd> / <kbd>↓</kbd></td><td>Clip suivant</td></tr>
+    <tr><td><kbd>K</kbd> / <kbd>↑</kbd></td><td>Clip précédent</td></tr>
+    <tr><td><kbd>Espace</kbd></td><td>Lire / pause (dans les bornes du clip)</td></tr>
+    <tr><td><kbd>D</kbd> / <kbd>F</kbd></td><td>Écouter le début / les 6 dernières secondes</td></tr>
+    <tr><td><kbd>V</kbd></td><td>Valider (et passer au suivant)</td></tr>
+    <tr><td><kbd>X</kbd></td><td>Rejeter (et passer au suivant)</td></tr>
+    <tr><td><kbd>U</kbd></td><td>Annuler la décision</td></tr>
+    <tr><td><kbd>A</kbd> / <kbd>Z</kbd></td><td>Début −1 s / +1 s</td></tr>
+    <tr><td><kbd>Q</kbd> / <kbd>S</kbd></td><td>Fin −1 s / +1 s</td></tr>
+    <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>Choisir le titre</td></tr>
+    <tr><td><kbd>E</kbd></td><td>Modifier le titre retenu</td></tr>
+    <tr><td><kbd>T</kbd></td><td>Modifier le texte de la miniature</td></tr>
+    <tr><td><kbd>Échap</kbd></td><td>Quitter un champ</td></tr>
+  </table>
+  <form method="dialog"><button>Fermer</button></form>
+</dialog>
+<div id="toast" class="toast hidden"></div>
+<script src="/static/review.js"></script>
+</body>
+</html>

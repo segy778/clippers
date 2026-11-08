@@ -165,7 +165,7 @@ def make_proxy(src: Path, proxy: Path) -> Path:
     tmp = proxy.with_name(proxy.stem + ".tmp.mp4")
     log.info("Création du proxy de revue 720p…")
     subprocess.run(
-        ["ffmpeg", "-y", "-v", "error", "-i", str(src), "-vf", "scale=-2:720", "-c:v", "libx264",
+        ["ffmpeg", "-y", "-v", "error", "-i", str(src), "-vf", "scale=-2:'min(720,ih)'", "-c:v", "libx264",
          "-preset", "veryfast", "-crf", "28", "-g", "48", "-c:a", "aac", "-b:a", "96k",
          "-movflags", "+faststart", str(tmp)],
         check=True,

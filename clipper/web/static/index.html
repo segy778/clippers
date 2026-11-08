@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clipper — vidéos</title>
+<link rel="icon" href="/static/favicon.svg">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar"><h1>Clipper</h1><span class="muted">Revue des clips</span></header>
+<main class="page">
+  <table class="videos">
+    <thead><tr><th>Vidéo</th><th>Durée</th><th>État</th><th class="num">À revoir</th><th class="num">Validés</th><th class="num">Rejetés</th></tr></thead>
+    <tbody id="rows"><tr><td colspan="6" class="muted">Chargement…</td></tr></tbody>
+  </table>
+</main>
+<script>
+const STAGES = {new: "à télécharger", downloaded: "téléchargée", transcribed: "transcrite", selected: "sélectionnée",
+                bounded: "bornes calées", titled: "titrée", ready: "prête"};
+const ts = s => { s = Math.floor(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+fetch("/api/videos").then(r => r.json()).then(videos => {
+  const rows = document.getElementById("rows");
+  if (!videos.length) { rows.innerHTML = '<tr><td colspan="6" class="muted">Aucune vidéo. Lance <code>clipper add URL</code> puis <code>clipper run</code>.</td></tr>'; return; }
+  rows.innerHTML = videos.map(v => {
+    const ready = v.stage === "ready";
+    const state = v.error ? '<span class="bad">échec</span>' : (STAGES[v.stage] || v.stage);
+    const name = esc(v.title || v.source_id);
+    return `<tr><td>${ready ? `<a href="/video/${v.id}">${name}</a>` : name}<div class="muted small">${esc(v.channel || "")}</div></td>
+      <td>${ts(v.duration)}</td><td>${state}</td><td class="num">${v.todo || 0}</td>
+      <td class="num">${v.approved || 0}</td><td class="num">${v.rejected || 0}</td></tr>`;
+  }).join("");
+});
+</script>
+</body>
+</html>

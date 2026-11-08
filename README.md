@@ -2,7 +2,7 @@
 
 Transforme des vidéos YouTube longues (podcasts, interviews, formations) en clips horizontaux de 2 à 5 minutes, notés, titrés et avec miniature, puis les publie en programmé sur une chaîne de clips.
 
-> État : **phase 1** (ingestion, transcription, sélection des candidats). Revue, découpe et miniatures arrivent en phase 2, publication en phase 3, suivi en phase 4.
+> État : **phases 1 et 2** (ingestion, transcription, sélection, bornes, titres, miniatures, revue, rendu). Publication en phase 3, suivi en phase 4.
 
 ## Installation pas à pas
 
@@ -27,7 +27,9 @@ Renseigne dans `.env` :
 - `DEEPGRAM_API_KEY` : https://console.deepgram.com → *API Keys* (200 $ de crédit offert à l'inscription)
 
 ### 4. Réglages
-Tout est dans `config.yaml` (commenté) : langue de transcription, modèle Claude, nombre de clips, durées, rendu, miniatures, cadence de publication, tarifs utilisés pour estimer les coûts.
+Tout est dans `config.yaml` (commenté) : langue de transcription, modèle Claude, nombre de clips, durées, rendu, miniatures (police, taille, couleurs, contour, position, bandeau), cadence de publication, tarifs utilisés pour estimer les coûts.
+
+Conseil miniatures : une police grasse et condensée (Anton, Bebas Neue, Montserrat ExtraBold — gratuites sur Google Fonts) rend mieux que la police par défaut ; indique son chemin dans `thumbnail.font_path`.
 
 Les prompts envoyés à Claude sont dans `prompts/*.md` : modifie-les librement, les `{{variables}}` sont remplacées automatiquement.
 
@@ -40,7 +42,34 @@ clipper add ~/Videos/episode-12.mp4                          # un fichier local
 clipper run                                                   # télécharge, transcrit, sélectionne
 clipper status                                                # état, nombre de clips, coût par vidéo et cumul
 clipper status 1                                              # détail des candidats de la vidéo 1
+clipper review                                                # ouvre la page de revue dans le navigateur
 ```
+
+### Ce que fait `clipper run`
+1. Télécharge la vidéo (≤ 1080p) et ses métadonnées.
+2. Transcrit (mots horodatés + locuteurs), une seule fois.
+3. Demande à Claude 5 à 15 candidats (début, fin, sujet, note, raison).
+4. Recale chaque clip sur des frontières de phrase avec 0,3 s de marge ; écarte (avec motif) les durées hors 2–5 min et les chevauchements.
+5. Rédige 3 titres, une description, 10 tags et le texte de miniature de chaque clip.
+6. Crée la miniature (image la plus nette avec un visage parmi 10, texte posé) et une copie 720p légère pour la revue.
+7. Rend les clips que tu as validés (1080p, fondu audio 0,3 s, −14 LUFS).
+
+### Page de revue
+Une page par vidéo. Le lecteur joue le clip actif dans ses bornes ; tout est sauvegardé immédiatement en base. Valider lance le rendu final en arrière-plan.
+
+| Touche | Action |
+|---|---|
+| `J` / `↓`, `K` / `↑` | clip suivant / précédent |
+| `Espace` | lire / pause dans les bornes |
+| `D` / `F` | écouter le début / les 6 dernières secondes |
+| `V` / `X` / `U` | valider / rejeter / annuler la décision |
+| `A` / `Z` | début −1 s / +1 s |
+| `Q` / `S` | fin −1 s / +1 s |
+| `1` `2` `3` | choisir le titre |
+| `E` / `T` | modifier le titre / le texte de miniature |
+| `?` | aide |
+
+Clique sur une des 10 vignettes pour changer l'image de la miniature. Les clips écartés automatiquement (trop courts ou trop longs) restent affichés : ajuste leurs bornes puis valide pour les repêcher.
 
 - Toutes les commandes sont **idempotentes** : relancer `clipper run` après un crash reprend là où ça s'est arrêté, sans retélécharger ni retranscrire.
 - Une vidéo en échec n'empêche pas les autres d'avancer. Après 3 échecs elle est mise de côté ; `clipper run --retry` la retente.
